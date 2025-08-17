@@ -1,5 +1,3 @@
-import React, { useEffect, useState } from "react";
-import { db } from "./services/firebase";
 import {
   addDoc,
   collection,
@@ -9,7 +7,9 @@ import {
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
-
+import { useEffect, useState } from "react";
+import { db } from "./services/firebase";
+import Contacto from "./components/Contacto";
 import ListadoProductos from "./components/ListadoProductos";
 import ProductoForm from "./components/ProductoForm";
 import VentaFormMultiple from "./components/VentaFormMultiple";
@@ -346,6 +346,11 @@ const App = () => {
             </ul>
           </div>
         )}
+      </section>
+
+      {/* 👇 Formulario de contacto al final */}
+      <section>
+        <Contacto />
       </section>
 
       <footer style={{ marginTop: 40 }}>
