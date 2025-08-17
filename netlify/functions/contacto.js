@@ -1,7 +1,8 @@
 // netlify/functions/contacto.js
-const fetch = require("node-fetch");
+import { db } from "../../firebaseConfig"; // ajusta la ruta si tu config está en otro lugar
+import { collection, addDoc } from "firebase/firestore";
 
-exports.handler = async function (event, context) {
+export async function handler(event, context) {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Method Not Allowed" };
   }
@@ -9,26 +10,20 @@ exports.handler = async function (event, context) {
   try {
     const data = JSON.parse(event.body);
 
-    // Aquí colocá la URL de tu webhook N8N
-    const n8nWebhookURL = "https://tu-n8n-public-url/webhook/contacto";
-
- const response = await fetch("/.netlify/functions/contacto", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify(formData),
-});
-
-    if (!response.ok) {
-      const text = await response.text();
-      return { statusCode: 500, body: `Error enviando a N8N: ${text}` };
-    }
+    // Guardamos el formulario en la colección "contactos"
+    await addDoc(collection(db, "contactos"), {
+      nombre: data.nombre,
+      email: data.email,
+      mensaje: data.mensaje,
+      fecha: new Date().toISOString(), // opcional, para registrar la fecha
+    });
 
     return {
       statusCode: 200,
       body: JSON.stringify({ message: "Formulario enviado correctamente" }),
     };
   } catch (error) {
+    console.error("Error guardando en Firestore:", error);
     return { statusCode: 500, body: `Error: ${error.message}` };
   }
-};
-
+}
