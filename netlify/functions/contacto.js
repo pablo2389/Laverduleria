@@ -12,11 +12,11 @@ exports.handler = async function (event, context) {
     // Aquí colocá la URL de tu webhook N8N
     const n8nWebhookURL = "https://tu-n8n-public-url/webhook/contacto";
 
-    const response = await fetch(n8nWebhookURL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
+ const response = await fetch("/.netlify/functions/contacto", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(formData),
+});
 
     if (!response.ok) {
       const text = await response.text();
