@@ -1,3 +1,4 @@
+// src/App.jsx
 import {
   addDoc,
   collection,
@@ -8,7 +9,8 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { db } from "../netlify/functions/firebase";
+import { db } from "./firebaseConfig";
+
 import Contacto from "./components/Contacto";
 import ListadoProductos from "./components/ListadoProductos";
 import ProductoForm from "./components/ProductoForm";
@@ -33,20 +35,26 @@ const App = () => {
   const [productos, setProductos] = useState([]);
   const [mensajeVenta, setMensajeVenta] = useState(null);
   const [ventasAcumuladas, setVentasAcumuladas] = useState(0);
+  const [mensajeEstado, setMensajeEstado] = useState("");
 
   useEffect(() => {
     const cargarProductos = async () => {
-      const productosCol = collection(db, "productos");
-      const snapshot = await getDocs(productosCol);
-      const lista = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          stock: convertirDesdeUnidadBase(data.stockBase, data.unidad),
-        };
-      });
-      setProductos(lista);
+      try {
+        const productosCol = collection(db, "productos");
+        const snapshot = await getDocs(productosCol);
+        const lista = snapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            unidad: data.unidad || "kg",
+            stock: convertirDesdeUnidadBase(data.stockBase || 0, data.unidad || "kg"),
+          };
+        });
+        setProductos(lista);
+      } catch (error) {
+        setMensajeEstado("Error cargando productos: " + error.message);
+      }
     };
     cargarProductos();
   }, []);
@@ -64,22 +72,23 @@ const App = () => {
         (p) => p.nombre.toLowerCase() === nombreBuscado
       );
 
+      const unidad = producto.unidad || "kg";
       const { stockBase, precioBase } = convertirAUnidadBase(
         producto.stock,
         producto.precio,
-        producto.unidad
+        unidad
       );
 
       if (existente) {
         const productoRef = doc(db, "productos", existente.id);
         await updateDoc(productoRef, {
           precio: producto.precio,
-          stockBase: existente.stockBase + stockBase,
-          unidad: producto.unidad || existente.unidad || "kg",
+          stockBase: (existente.stockBase || 0) + stockBase,
+          unidad: unidad,
           precioBase,
           stock: convertirDesdeUnidadBase(
-            existente.stockBase + stockBase,
-            producto.unidad || existente.unidad
+            (existente.stockBase || 0) + stockBase,
+            unidad
           ),
         });
         setProductos((prev) =>
@@ -88,21 +97,22 @@ const App = () => {
               ? {
                   ...p,
                   precio: producto.precio,
-                  stockBase: p.stockBase + stockBase,
-                  unidad: producto.unidad || p.unidad || "kg",
+                  stockBase: (p.stockBase || 0) + stockBase,
+                  unidad,
                   precioBase,
                   stock: convertirDesdeUnidadBase(
-                    p.stockBase + stockBase,
-                    producto.unidad || p.unidad
+                    (p.stockBase || 0) + stockBase,
+                    unidad
                   ),
                 }
               : p
           )
         );
-        alert(`Producto ${producto.nombre} actualizado con nuevo stock y precio.`);
+        setMensajeEstado(`Producto ${producto.nombre} actualizado con éxito`);
       } else {
         const productoParaGuardar = {
           ...producto,
+          unidad,
           stockBase,
           precioBase,
           stock: producto.stock,
@@ -112,10 +122,10 @@ const App = () => {
           ...prev,
           { id: docRef.id, ...productoParaGuardar },
         ]);
-        alert("Producto agregado con éxito");
+        setMensajeEstado(`Producto ${producto.nombre} agregado con éxito`);
       }
     } catch (error) {
-      alert("Error al agregar producto: " + error.message);
+      setMensajeEstado("Error al agregar producto: " + error.message);
     }
   };
 
@@ -169,8 +179,9 @@ const App = () => {
       setProductos((prev) =>
         prev.map((p) => (p.id === id ? { ...p, ...updateData } : p))
       );
+      setMensajeEstado(`Producto ${prod.nombre} actualizado`);
     } catch (error) {
-      alert("Error al actualizar producto: " + error.message);
+      setMensajeEstado("Error al actualizar producto: " + error.message);
     }
   };
 
@@ -182,7 +193,10 @@ const App = () => {
     if (prod.unidad === "kg") incrementoBase = incremento * 1000;
 
     const nuevoStockBase = prod.stockBase + incrementoBase;
-    if (nuevoStockBase < 0) return;
+    if (nuevoStockBase < 0) {
+      setMensajeEstado(`Stock insuficiente para ${prod.nombre}`);
+      return;
+    }
 
     try {
       const productoRef = doc(db, "productos", id);
@@ -203,30 +217,31 @@ const App = () => {
             : p
         )
       );
+      setMensajeEstado(`Stock de ${prod.nombre} ajustado`);
     } catch (error) {
-      alert("Error al ajustar stock: " + error.message);
+      setMensajeEstado("Error al ajustar stock: " + error.message);
     }
   };
 
   const eliminarProducto = async (id) => {
-    const confirmar = window.confirm("¿Estás seguro de eliminar este producto?");
+    const prod = productos.find((p) => p.id === id);
+    if (!prod) return;
+    const confirmar = window.confirm(`¿Eliminar ${prod.nombre}?`);
     if (!confirmar) return;
 
     try {
       await deleteDoc(doc(db, "productos", id));
       setProductos((prev) => prev.filter((p) => p.id !== id));
+      setMensajeEstado(`Producto ${prod.nombre} eliminado`);
     } catch (error) {
-      alert("Error al eliminar producto: " + error.message);
+      setMensajeEstado("Error al eliminar producto: " + error.message);
     }
   };
 
   const registrarVenta = async (ventasArray) => {
     try {
       let totalVenta = 0;
-
-      // Clonamos para no mutar estado directo
       const nuevosProductos = productos.map((p) => ({ ...p }));
-
       const detalleVenta = [];
 
       for (const venta of ventasArray) {
@@ -240,12 +255,13 @@ const App = () => {
         if (producto.unidad === "grs") {
           cantidadParaPrecio = cantidad / 1000;
           cantidadStockBase = cantidad;
-        } else {
+        } else if (producto.unidad === "kg") {
           cantidadStockBase = cantidad * 1000;
         }
 
         if (cantidadStockBase > producto.stockBase) {
-          throw new Error(`Stock insuficiente para ${producto.nombre}`);
+          setMensajeEstado(`Stock insuficiente para ${producto.nombre}`);
+          return;
         }
 
         producto.stockBase -= cantidadStockBase;
@@ -254,7 +270,6 @@ const App = () => {
           producto.unidad
         );
 
-        // Guardar venta
         const ventasCol = collection(db, "ventas");
         await addDoc(ventasCol, {
           productoId: producto.id,
@@ -266,7 +281,6 @@ const App = () => {
           fecha: serverTimestamp(),
         });
 
-        // Construir detalle para mostrar
         detalleVenta.push({
           nombre: producto.nombre,
           cantidad,
@@ -275,7 +289,6 @@ const App = () => {
           subtotal: cantidadParaPrecio * producto.precio,
         });
 
-        // Actualizar stock en Firestore
         const productoRef = doc(db, "productos", producto.id);
         await updateDoc(productoRef, {
           stockBase: producto.stockBase,
@@ -287,21 +300,35 @@ const App = () => {
 
       setProductos(nuevosProductos);
       setVentasAcumuladas((prev) => prev + totalVenta);
-
       setMensajeVenta({
         nombre: "Venta múltiple",
         cantidad: ventasArray.reduce((a, v) => a + v.cantidad, 0),
         total: totalVenta,
         detalle: detalleVenta,
       });
+      setMensajeEstado("Venta registrada con éxito");
     } catch (error) {
-      alert("Error al registrar venta: " + error.message);
+      setMensajeEstado("Error al registrar venta: " + error.message);
     }
   };
 
   return (
     <div style={{ maxWidth: 700, margin: "auto", padding: 20, fontFamily: "Arial" }}>
       <h1>🛒 Verdulería - Caja Registradora</h1>
+
+      {mensajeEstado && (
+        <div
+          style={{
+            backgroundColor: "#f0f0f0",
+            padding: 10,
+            borderRadius: 6,
+            marginBottom: 20,
+            color: "black",
+          }}
+        >
+          {mensajeEstado}
+        </div>
+      )}
 
       <section>
         <h2>Agregar producto</h2>
@@ -348,12 +375,19 @@ const App = () => {
         )}
       </section>
 
-      {/* 👇 Formulario de contacto al final */}
       <section>
         <Contacto />
       </section>
 
-      <footer style={{ marginTop: 40 }}>
+      <footer
+        style={{
+          position: "sticky",
+          bottom: 0,
+          backgroundColor: "#f0f0f0",
+          padding: 10,
+          marginTop: 40,
+        }}
+      >
         <p>
           Ventas acumuladas: <strong>${ventasAcumuladas.toFixed(2)}</strong>
         </p>

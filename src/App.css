@@ -68,3 +68,9 @@ body{
   background-repeat: no-repeat;
   color: #d8cf4f;
 }
+footer {
+  position: sticky;
+  bottom: 0;
+  background-color: #f0f0f0;
+  padding: 10px;
+}

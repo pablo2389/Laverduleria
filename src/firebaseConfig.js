@@ -1,4 +1,4 @@
-// netlify/functions/firebaseConfig.js
+// src/firebaseConfig.js
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 
