@@ -1,2 +1,3 @@
 node_modules/
 *.local
+n8n/
