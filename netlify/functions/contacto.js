@@ -1,5 +1,4 @@
-// netlify/functions/contacto.js
-import { db } from "../../firebaseConfig"; // ajusta la ruta si tu config está en otro lugar
+import { db } from "./firebase"; // IMPORTANTE: misma carpeta
 import { collection, addDoc } from "firebase/firestore";
 
 export async function handler(event, context) {
@@ -10,12 +9,11 @@ export async function handler(event, context) {
   try {
     const data = JSON.parse(event.body);
 
-    // Guardamos el formulario en la colección "contactos"
     await addDoc(collection(db, "contactos"), {
       nombre: data.nombre,
       email: data.email,
       mensaje: data.mensaje,
-      fecha: new Date().toISOString(), // opcional, para registrar la fecha
+      fecha: new Date().toISOString(),
     });
 
     return {

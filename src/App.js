@@ -8,7 +8,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { db } from "./services/firebase";
+import { db } from "../netlify/functions/firebase";
 import Contacto from "./components/Contacto";
 import ListadoProductos from "./components/ListadoProductos";
 import ProductoForm from "./components/ProductoForm";
