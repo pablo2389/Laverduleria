@@ -1,5 +1,6 @@
 // netlify/functions/ofertas-semanales.js
-import { db } from "../firebaseConfig";
+import { db } from "../../src/firebaseConfig";
+
 import { collection, getDocs } from "firebase/firestore";
 import nodemailer from "nodemailer";
 
