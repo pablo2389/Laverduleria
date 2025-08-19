@@ -1,6 +1,6 @@
+import { addDoc, collection, deleteDoc, doc, getDocs, updateDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { db } from "../firebaseConfig";
-import { collection, getDocs, addDoc, updateDoc, doc, deleteDoc } from "firebase/firestore";
+import { db } from "../../netlify/functions/firebaseConfig";
 
 const OfertasAdmin = () => {
   const [ofertas, setOfertas] = useState([]);

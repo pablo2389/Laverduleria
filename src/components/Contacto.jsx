@@ -1,59 +1,61 @@
-// src/components/Contacto.jsx
-import React, { useState } from "react";
+import { useState } from "react";
 
-const Contacto = () => {
-  const [formData, setFormData] = useState({ nombre: "", email: "", mensaje: "" });
-  const [enviando, setEnviando] = useState(false);
-  const [mensajeEstado, setMensajeEstado] = useState("");
-
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
+export default function ContactoForm() {
+  const [nombre, setNombre] = useState("");
+  const [email, setEmail] = useState("");
+  const [mensaje, setMensaje] = useState("");
+  const [estado, setEstado] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setEnviando(true);
-    setMensajeEstado("");
+    setEstado("Enviando...");
 
     try {
-      const response = await fetch("/.netlify/functions/contacto", {
+      const res = await fetch("/.netlify/functions/contacto", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ nombre, email, mensaje }),
       });
 
-      if (response.ok) {
-        setMensajeEstado("✅ Mensaje enviado correctamente!");
-        setFormData({ nombre: "", email: "", mensaje: "" });
+      const text = await res.text();
+
+      if (res.ok) {
+        setEstado("Mensaje enviado ✅");
+        setNombre("");
+        setEmail("");
+        setMensaje("");
       } else {
-        const errorText = await response.text();
-        setMensajeEstado("⚠️ Error al enviar mensaje: " + errorText);
+        setEstado("Error: " + text);
       }
     } catch (err) {
-      setMensajeEstado("⚠️ Error enviando mensaje: " + err.message);
-      console.error("Error enviando el mensaje:", err);
+      setEstado("Error al enviar: " + err.message);
     }
-
-    setEnviando(false);
   };
 
   return (
-    <section style={{ marginTop: 40 }}>
-      <h2>Contacto</h2>
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <label>Nombre:</label>
-        <input type="text" name="nombre" value={formData.nombre} onChange={handleChange} required />
-        <label>Email:</label>
-        <input type="email" name="email" value={formData.email} onChange={handleChange} required />
-        <label>Mensaje:</label>
-        <textarea name="mensaje" rows={4} value={formData.mensaje} onChange={handleChange} required></textarea>
-        <button type="submit" disabled={enviando}>
-          {enviando ? "Enviando..." : "Enviar"}
-        </button>
-        {mensajeEstado && <p>{mensajeEstado}</p>}
-      </form>
-    </section>
+    <form onSubmit={handleSubmit}>
+      <input
+        type="text"
+        placeholder="Nombre"
+        value={nombre}
+        onChange={(e) => setNombre(e.target.value)}
+        required
+      />
+      <input
+        type="email"
+        placeholder="Correo electrónico"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        required
+      />
+      <textarea
+        placeholder="Mensaje"
+        value={mensaje}
+        onChange={(e) => setMensaje(e.target.value)}
+        required
+      />
+      <button type="submit">Enviar</button>
+      <p>{estado}</p>
+    </form>
   );
-};
-
-export default Contacto;
+}

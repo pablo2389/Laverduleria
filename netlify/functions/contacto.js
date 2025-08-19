@@ -1,46 +1,50 @@
-// netlify/functions/ofertas-semanales.js
-import { db } from "../../src/firebaseConfig";
+// contacto.js
+const { db } = require("./firebaseConfig.js");
+const { collection, addDoc } = require("firebase/firestore");
+const nodemailer = require("nodemailer");
 
-import { collection, getDocs } from "firebase/firestore";
-import nodemailer from "nodemailer";
+exports.handler = async function (event) {
+  if (event.httpMethod !== "POST") {
+    return { statusCode: 405, body: "Method Not Allowed" };
+  }
 
-export const handler = async (event, context) => {
   try {
-    // 1️⃣ Obtener todos los contactos
-    const snapshot = await getDocs(collection(db, "contactos"));
-    const emails = snapshot.docs.map(doc => doc.data().email);
+    const { nombre, email, mensaje } = JSON.parse(event.body);
 
-    if (emails.length === 0) {
-      return { statusCode: 200, body: "No hay contactos para enviar" };
+    if (!nombre || !email || !mensaje) {
+      return { statusCode: 400, body: "Faltan datos" };
     }
 
-    // 2️⃣ Configurar transporte
+    // Guardar mensaje en Firestore
+    await addDoc(collection(db, "contactos"), {
+      nombre,
+      email,
+      mensaje,
+      fecha: new Date().toISOString(),
+    });
+
+    // Enviar correo con Gmail
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
+        user: "pablomas.kpo2389@gmail.com",
+        pass: "lfmgoaneigqjpztr"
+      }
     });
 
-    // 3️⃣ Email de ofertas
-    const mensaje = {
-      from: `"Verdulería App" <${process.env.SMTP_USER}>`,
-      bcc: emails, // se manda a todos en copia oculta
-      subject: "🍎 Ofertas de la semana en la Verdulería",
-      html: `<h2>¡Ofertas frescas de la semana!</h2>
-             <ul>
-               <li>Frutillas $6000/kg 🍓</li>
-               <li>Papas $700/kg 🥔</li>
-             </ul>
-             <p>Gracias por elegirnos 💚</p>`
+    const mailOptions = {
+      from: `"Verdulería" <pablomas.kpo2389@gmail.com>`,
+      to: "pablomas.kpo2389@gmail.com",
+      subject: "Nuevo mensaje desde la verdulería",
+      text: `Nombre: ${nombre}\nEmail: ${email}\nMensaje: ${mensaje}`
     };
 
-    await transporter.sendMail(mensaje);
+    const info = await transporter.sendMail(mailOptions);
+    console.log("Correo enviado:", info.response);
 
-    return { statusCode: 200, body: "Ofertas enviadas con éxito a " + emails.length + " contactos" };
-  } catch (err) {
-    console.error(err);
-    return { statusCode: 500, body: "Error enviando ofertas: " + err.message };
+    return { statusCode: 200, body: "Mensaje enviado correctamente ✅" };
+  } catch (error) {
+    console.error("Error en contacto:", error);
+    return { statusCode: 500, body: "Error interno del servidor: " + error.message };
   }
 };

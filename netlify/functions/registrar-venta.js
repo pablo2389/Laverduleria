@@ -1,6 +1,8 @@
-import PDFDocument from "pdfkit";
+import { db } from "./firebaseConfig"; // apunta al mismo folder
+import { collection, getDocs } from "firebase/firestore";
 import nodemailer from "nodemailer";
-import { writeFileSync } from "fs";
+import PDFDocument from "pdfkit"; // solo si generas PDF
+
 
 export async function handler(event, context) {
   try {

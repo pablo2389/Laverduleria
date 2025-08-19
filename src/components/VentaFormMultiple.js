@@ -6,7 +6,7 @@ const VentaFormMultiple = ({ productos, onRegistrarVenta, clienteNombre, cliente
 
   const handleCantidadChange = (id, value) => {
     const num = Number(value);
-    if (num < 0) return; // evitar negativos
+    if (num < 0) return;
     setCantidades({ ...cantidades, [id]: num });
   };
 
@@ -25,7 +25,14 @@ const VentaFormMultiple = ({ productos, onRegistrarVenta, clienteNombre, cliente
   const registrarVentaClick = async () => {
     const ventasArray = Object.entries(cantidades)
       .filter(([_, cantidad]) => cantidad > 0)
-      .map(([id, cantidad]) => ({ productoId: id, cantidad }));
+      .map(([id, cantidad]) => {
+        const prod = productos.find(p => p.id === id);
+        if (cantidad > prod.stock) {
+          alert(`No hay suficiente stock de ${prod.nombre}`);
+          throw new Error("Stock insuficiente");
+        }
+        return { productoId: id, cantidad };
+      });
 
     if (ventasArray.length === 0) {
       alert("Ingrese al menos una cantidad para registrar la venta.");
@@ -34,21 +41,15 @@ const VentaFormMultiple = ({ productos, onRegistrarVenta, clienteNombre, cliente
 
     onRegistrarVenta(ventasArray);
 
-    // Construir objeto venta para enviar ticket
     const venta = {
       cliente: clienteNombre || "Cliente",
       email: clienteEmail || "cliente@correo.com",
       productos: ventasArray.map(v => {
         const p = productos.find(prod => prod.id === v.productoId);
-        return {
-          nombre: p.nombre,
-          cantidad: v.cantidad,
-          precio: p.precio
-        };
+        return { nombre: p.nombre, cantidad: v.cantidad, precio: p.precio };
       })
     };
 
-    // Enviar ticket PDF
     try {
       const response = await fetch("/.netlify/functions/enviar-ticket", {
         method: "POST",
