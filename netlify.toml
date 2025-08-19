@@ -1,0 +1,6 @@
+[build]
+  functions = "netlify/functions"
+
+[[scheduled.functions]]
+function = "ofertas-semanales"
+cron = "0 9 * * 1"
