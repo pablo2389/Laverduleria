@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 
-const VentaFormMultiple = ({ productos, onRegistrarVenta }) => {
+const VentaFormMultiple = ({ productos, onRegistrarVenta, clienteNombre, clienteEmail }) => {
   const [cantidades, setCantidades] = useState({});
   const [ventaTotal, setVentaTotal] = useState(0);
 
@@ -15,19 +15,14 @@ const VentaFormMultiple = ({ productos, onRegistrarVenta }) => {
     for (const producto of productos) {
       const cantidad = cantidades[producto.id] || 0;
       if (cantidad > 0) {
-        let subtotal = 0;
-        if (producto.unidad === "grs") {
-          subtotal = producto.precio * (cantidad / 1000);
-        } else {
-          subtotal = producto.precio * cantidad;
-        }
+        let subtotal = producto.unidad === "grs" ? producto.precio * (cantidad / 1000) : producto.precio * cantidad;
         total += subtotal;
       }
     }
     setVentaTotal(total);
   }, [cantidades, productos]);
 
-  const registrarVentaClick = () => {
+  const registrarVentaClick = async () => {
     const ventasArray = Object.entries(cantidades)
       .filter(([_, cantidad]) => cantidad > 0)
       .map(([id, cantidad]) => ({ productoId: id, cantidad }));
@@ -38,6 +33,34 @@ const VentaFormMultiple = ({ productos, onRegistrarVenta }) => {
     }
 
     onRegistrarVenta(ventasArray);
+
+    // Construir objeto venta para enviar ticket
+    const venta = {
+      cliente: clienteNombre || "Cliente",
+      email: clienteEmail || "cliente@correo.com",
+      productos: ventasArray.map(v => {
+        const p = productos.find(prod => prod.id === v.productoId);
+        return {
+          nombre: p.nombre,
+          cantidad: v.cantidad,
+          precio: p.precio
+        };
+      })
+    };
+
+    // Enviar ticket PDF
+    try {
+      const response = await fetch("/.netlify/functions/enviar-ticket", {
+        method: "POST",
+        body: JSON.stringify(venta)
+      });
+      const text = await response.text();
+      alert(text);
+    } catch (error) {
+      console.error(error);
+      alert("Error enviando ticket: " + error.message);
+    }
+
     setCantidades({});
     setVentaTotal(0);
   };
@@ -47,15 +70,14 @@ const VentaFormMultiple = ({ productos, onRegistrarVenta }) => {
     setVentaTotal(0);
   };
 
-  const hayVentas = Object.values(cantidades).some((cantidad) => cantidad > 0);
+  const hayVentas = Object.values(cantidades).some(cantidad => cantidad > 0);
 
   return (
     <div>
       <h2>🧾 Registrador de ventas múltiples</h2>
-      {productos.map((producto) => (
+      {productos.map(producto => (
         <div key={producto.id} style={{ marginBottom: "10px" }}>
-          <strong>{producto.nombre}</strong> - Stock:{" "}
-          {producto.stock.toFixed(3)} {producto.unidad} - $ {producto.precio.toFixed(2)}
+          <strong>{producto.nombre}</strong> - Stock: {producto.stock.toFixed(3)} {producto.unidad} - $ {producto.precio.toFixed(2)}
           <br />
           Cantidad ({producto.unidad === "grs" ? "grs" : "kg"}):{" "}
           <input
