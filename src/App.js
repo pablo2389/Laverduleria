@@ -1,18 +1,15 @@
 // src/App.jsx
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  serverTimestamp,
-  updateDoc,
-} from "firebase/firestore";
 import { useEffect, useState } from "react";
+import {
+  collection,
+  getDocs,
+  addDoc,
+  updateDoc,
+  doc,
+  serverTimestamp,
+} from "firebase/firestore";
 import { db } from "./firebaseConfig";
 
-import Contacto from "./components/Contacto";
-import ListadoProductos from "./components/ListadoProductos";
 import ProductoForm from "./components/ProductoForm";
 import VentaFormMultiple from "./components/VentaFormMultiple";
 
@@ -33,10 +30,10 @@ const convertirAUnidadBase = (stock, precio, unidad) => {
 
 const App = () => {
   const [productos, setProductos] = useState([]);
-  const [mensajeVenta, setMensajeVenta] = useState(null);
-  const [ventasAcumuladas, setVentasAcumuladas] = useState(0);
   const [mensajeEstado, setMensajeEstado] = useState("");
+  const [mensajeVenta, setMensajeVenta] = useState(null);
 
+  // Cargar productos desde Firebase
   useEffect(() => {
     const cargarProductos = async () => {
       try {
@@ -59,15 +56,13 @@ const App = () => {
     cargarProductos();
   }, []);
 
+  // Agregar o actualizar producto
   const agregarProducto = async (producto) => {
     try {
       const productosCol = collection(db, "productos");
       const nombreBuscado = producto.nombre.toLowerCase();
       const snapshot = await getDocs(productosCol);
-      const productosLista = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+      const productosLista = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       const existente = productosLista.find(
         (p) => p.nombre.toLowerCase() === nombreBuscado
       );
@@ -84,12 +79,9 @@ const App = () => {
         await updateDoc(productoRef, {
           precio: producto.precio,
           stockBase: (existente.stockBase || 0) + stockBase,
-          unidad: unidad,
+          unidad,
           precioBase,
-          stock: convertirDesdeUnidadBase(
-            (existente.stockBase || 0) + stockBase,
-            unidad
-          ),
+          stock: convertirDesdeUnidadBase((existente.stockBase || 0) + stockBase, unidad),
         });
         setProductos((prev) =>
           prev.map((p) =>
@@ -100,10 +92,7 @@ const App = () => {
                   stockBase: (p.stockBase || 0) + stockBase,
                   unidad,
                   precioBase,
-                  stock: convertirDesdeUnidadBase(
-                    (p.stockBase || 0) + stockBase,
-                    unidad
-                  ),
+                  stock: convertirDesdeUnidadBase((p.stockBase || 0) + stockBase, unidad),
                 }
               : p
           )
@@ -118,10 +107,7 @@ const App = () => {
           stock: producto.stock,
         };
         const docRef = await addDoc(productosCol, productoParaGuardar);
-        setProductos((prev) => [
-          ...prev,
-          { id: docRef.id, ...productoParaGuardar },
-        ]);
+        setProductos((prev) => [...prev, { id: docRef.id, ...productoParaGuardar }]);
         setMensajeEstado(`Producto ${producto.nombre} agregado con éxito`);
       }
     } catch (error) {
@@ -129,115 +115,7 @@ const App = () => {
     }
   };
 
-  const actualizarProducto = async (id, campo, valor) => {
-    const prod = productos.find((p) => p.id === id);
-    if (!prod) return;
-
-    let valorParseado;
-    if (campo === "precio") {
-      valorParseado = parseFloat(valor);
-      if (isNaN(valorParseado) || valorParseado <= 0) return;
-    } else if (campo === "stock") {
-      valorParseado = parseFloat(valor);
-      if (isNaN(valorParseado) || valorParseado < 0) return;
-    } else {
-      valorParseado = valor;
-    }
-
-    try {
-      const productoRef = doc(db, "productos", id);
-      let updateData = { [campo]: valorParseado };
-
-      if (campo === "stock") {
-        const nuevoStockBase = convertirAUnidadBase(
-          valorParseado,
-          prod.precio,
-          prod.unidad
-        ).stockBase;
-        updateData.stockBase = nuevoStockBase;
-      }
-      if (campo === "precio") {
-        const nuevoPrecioBase = convertirAUnidadBase(
-          prod.stock,
-          valorParseado,
-          prod.unidad
-        ).precioBase;
-        updateData.precioBase = nuevoPrecioBase;
-      }
-      if (campo === "unidad") {
-        const { stockBase, precioBase } = convertirAUnidadBase(
-          prod.stock,
-          prod.precio,
-          valorParseado
-        );
-        updateData.stockBase = stockBase;
-        updateData.precioBase = precioBase;
-      }
-
-      await updateDoc(productoRef, updateData);
-
-      setProductos((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, ...updateData } : p))
-      );
-      setMensajeEstado(`Producto ${prod.nombre} actualizado`);
-    } catch (error) {
-      setMensajeEstado("Error al actualizar producto: " + error.message);
-    }
-  };
-
-  const ajustarStock = async (id, incremento) => {
-    const prod = productos.find((p) => p.id === id);
-    if (!prod) return;
-
-    let incrementoBase = incremento;
-    if (prod.unidad === "kg") incrementoBase = incremento * 1000;
-
-    const nuevoStockBase = prod.stockBase + incrementoBase;
-    if (nuevoStockBase < 0) {
-      setMensajeEstado(`Stock insuficiente para ${prod.nombre}`);
-      return;
-    }
-
-    try {
-      const productoRef = doc(db, "productos", id);
-      const nuevoStockOriginal = convertirDesdeUnidadBase(
-        nuevoStockBase,
-        prod.unidad
-      );
-
-      await updateDoc(productoRef, {
-        stockBase: nuevoStockBase,
-        stock: nuevoStockOriginal,
-      });
-
-      setProductos((prev) =>
-        prev.map((p) =>
-          p.id === id
-            ? { ...p, stockBase: nuevoStockBase, stock: nuevoStockOriginal }
-            : p
-        )
-      );
-      setMensajeEstado(`Stock de ${prod.nombre} ajustado`);
-    } catch (error) {
-      setMensajeEstado("Error al ajustar stock: " + error.message);
-    }
-  };
-
-  const eliminarProducto = async (id) => {
-    const prod = productos.find((p) => p.id === id);
-    if (!prod) return;
-    const confirmar = window.confirm(`¿Eliminar ${prod.nombre}?`);
-    if (!confirmar) return;
-
-    try {
-      await deleteDoc(doc(db, "productos", id));
-      setProductos((prev) => prev.filter((p) => p.id !== id));
-      setMensajeEstado(`Producto ${prod.nombre} eliminado`);
-    } catch (error) {
-      setMensajeEstado("Error al eliminar producto: " + error.message);
-    }
-  };
-
+  // Registrar venta y enviar ticket PDF
   const registrarVenta = async (ventasArray) => {
     try {
       let totalVenta = 0;
@@ -265,11 +143,9 @@ const App = () => {
         }
 
         producto.stockBase -= cantidadStockBase;
-        producto.stock = convertirDesdeUnidadBase(
-          producto.stockBase,
-          producto.unidad
-        );
+        producto.stock = convertirDesdeUnidadBase(producto.stockBase, producto.unidad);
 
+        // Guardar venta en Firebase
         const ventasCol = collection(db, "ventas");
         await addDoc(ventasCol, {
           productoId: producto.id,
@@ -290,16 +166,12 @@ const App = () => {
         });
 
         const productoRef = doc(db, "productos", producto.id);
-        await updateDoc(productoRef, {
-          stockBase: producto.stockBase,
-          stock: producto.stock,
-        });
+        await updateDoc(productoRef, { stockBase: producto.stockBase, stock: producto.stock });
 
         totalVenta += cantidadParaPrecio * producto.precio;
       }
 
       setProductos(nuevosProductos);
-      setVentasAcumuladas((prev) => prev + totalVenta);
       setMensajeVenta({
         nombre: "Venta múltiple",
         cantidad: ventasArray.reduce((a, v) => a + v.cantidad, 0),
@@ -307,6 +179,24 @@ const App = () => {
         detalle: detalleVenta,
       });
       setMensajeEstado("Venta registrada con éxito");
+
+      // Enviar ticket PDF al email usando Netlify Function
+      const ventaParaEmail = {
+        cliente: "Cliente",
+        email: "cliente@correo.com", // aquí podrías usar un input para email
+        productos: detalleVenta.map((v) => ({
+          nombre: v.nombre,
+          cantidad: v.cantidad,
+          precio: v.precioUnitario,
+          subtotal: v.subtotal,
+        })),
+        total: totalVenta,
+      };
+
+      await fetch("/.netlify/functions/enviar-ticket", {
+        method: "POST",
+        body: JSON.stringify(ventaParaEmail),
+      });
     } catch (error) {
       setMensajeEstado("Error al registrar venta: " + error.message);
     }
@@ -323,7 +213,6 @@ const App = () => {
             padding: 10,
             borderRadius: 6,
             marginBottom: 20,
-            color: "black",
           }}
         >
           {mensajeEstado}
@@ -333,15 +222,6 @@ const App = () => {
       <section>
         <h2>Agregar producto</h2>
         <ProductoForm onAgregar={agregarProducto} />
-      </section>
-
-      <section>
-        <ListadoProductos
-          productos={productos}
-          onActualizar={actualizarProducto}
-          onAjustarStock={ajustarStock}
-          onEliminarProducto={eliminarProducto}
-        />
       </section>
 
       <section>
@@ -374,24 +254,6 @@ const App = () => {
           </div>
         )}
       </section>
-
-      <section>
-        <Contacto />
-      </section>
-
-      <footer
-        style={{
-          position: "sticky",
-          bottom: 0,
-          backgroundColor: "#f0f0f0",
-          padding: 10,
-          marginTop: 40,
-        }}
-      >
-        <p>
-          Ventas acumuladas: <strong>${ventasAcumuladas.toFixed(2)}</strong>
-        </p>
-      </footer>
     </div>
   );
 };
