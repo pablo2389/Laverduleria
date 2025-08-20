@@ -1,33 +1,39 @@
-import { db } from "./firebaseConfig"; // apunta al mismo folder
-import { collection, getDocs } from "firebase/firestore";
+import { db } from "./firebaseConfig";
+import { collection, addDoc } from "firebase/firestore";
 import nodemailer from "nodemailer";
-import PDFDocument from "pdfkit"; // solo si generas PDF
+import PDFDocument from "pdfkit";
+import path from "path";
 
+// Validación de email
+function esEmailValido(email) {
+  const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return regex.test(email);
+}
+
+// Generar PDF en memoria
 const generarPDF = (productos, cliente, email) =>
   new Promise((resolve) => {
     const doc = new PDFDocument({ size: "A4", margin: 50 });
     const buffers = [];
-
     doc.on("data", buffers.push.bind(buffers));
     doc.on("end", () => resolve(Buffer.concat(buffers)));
 
-    // Título
-    doc.fontSize(20).text("🧾 Ticket de Compra Verdulería", { align: "center" });
+    // Fuente UTF-8 para caracteres especiales
+    doc.font(path.join(process.cwd(), "fonts", "DejaVuSans.ttf"));
+
+    doc.fontSize(20).text("🧾 Ticket de Compra - Verdulería", { align: "center" });
     doc.moveDown();
 
-    // Datos del cliente
     doc.fontSize(14).text(`Cliente: ${cliente}`);
     doc.text(`Email: ${email}`);
     doc.moveDown();
 
-    // Encabezado de tabla
     doc.fontSize(12).text("Producto", { continued: true, width: 200 });
     doc.text("Cantidad", { continued: true, width: 100, align: "center" });
     doc.text("Precio", { align: "right" });
     doc.moveDown(0.5);
     doc.moveTo(50, doc.y).lineTo(550, doc.y).stroke();
 
-    // Productos
     productos.forEach((p) => {
       doc.text(p.nombre, 50, doc.y, { continued: true, width: 200 });
       doc.text(p.cantidad.toString(), { continued: true, width: 100, align: "center" });
@@ -37,24 +43,73 @@ const generarPDF = (productos, cliente, email) =>
     doc.moveDown();
     doc.moveTo(50, doc.y).lineTo(550, doc.y).stroke();
 
-    // Total
     const total = productos.reduce((sum, p) => sum + p.precio * p.cantidad, 0);
-    doc.fontSize(14).text(`💰 Total: $${total.toFixed(2)}`, { align: "right" });
+    doc.fontSize(14).text(`Total: $${total.toFixed(2)}`, { align: "right" });
 
     doc.end();
   });
+
+// Generar HTML para el correo
+const generarHTML = (productos, cliente, email) => {
+  const filas = productos
+    .map(
+      (p) => `
+      <tr>
+        <td style="padding:8px; border:1px solid #ddd;">${p.nombre}</td>
+        <td style="padding:8px; border:1px solid #ddd; text-align:center;">${p.cantidad}</td>
+        <td style="padding:8px; border:1px solid #ddd; text-align:right;">$${(p.precio * p.cantidad).toFixed(2)}</td>
+      </tr>`
+    )
+    .join("");
+
+  const total = productos.reduce((sum, p) => sum + p.precio * p.cantidad, 0);
+
+  return `
+  <div style="font-family: Arial, sans-serif; max-width: 600px; margin:auto;">
+    <h2 style="text-align:center; color:#2c3e50;">🧾 Ticket de Compra - Verdulería</h2>
+    <p><strong>Cliente:</strong> ${cliente}</p>
+    <p><strong>Email:</strong> ${email}</p>
+    <table style="width:100%; border-collapse: collapse; margin-top:15px;">
+      <thead>
+        <tr style="background:#f2f2f2;">
+          <th style="padding:8px; border:1px solid #ddd;">Producto</th>
+          <th style="padding:8px; border:1px solid #ddd;">Cantidad</th>
+          <th style="padding:8px; border:1px solid #ddd;">Precio</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${filas}
+      </tbody>
+    </table>
+    <h3 style="text-align:right; margin-top:20px;">💰 Total: $${total.toFixed(2)}</h3>
+  </div>`;
+};
 
 export const handler = async (event) => {
   try {
     const body = JSON.parse(event.body);
     const { cliente, email, productos } = body;
 
-    if (!cliente || !email || !productos || productos.length === 0) {
+    if (!cliente || !productos || productos.length === 0) {
       return { statusCode: 400, body: "Faltan datos de la venta" };
     }
 
-    // Generar PDF
-    const pdfBuffer = await generarPDF(productos, cliente, email);
+    // Validación de email
+    const destinatario = esEmailValido(email) ? email : "pablomas.kpo2389@gmail.com";
+
+    // Generar PDF + HTML
+    const pdfBuffer = await generarPDF(productos, cliente, destinatario);
+    const htmlBody = generarHTML(productos, cliente, destinatario);
+
+    // Guardar venta en Firestore
+    const total = productos.reduce((sum, p) => sum + p.precio * p.cantidad, 0);
+    await addDoc(collection(db, "ventas"), {
+      cliente,
+      email: destinatario,
+      productos,
+      total,
+      fecha: new Date().toISOString(),
+    });
 
     // Configurar Nodemailer
     const transporter = nodemailer.createTransport({
@@ -65,12 +120,12 @@ export const handler = async (event) => {
       },
     });
 
-    // Enviar correo con el ticket
+    // Enviar correo con PDF adjunto + HTML
     await transporter.sendMail({
       from: `"Verdulería" <${process.env.SMTP_USER}>`,
-      to: email,
-      subject: "Tu Ticket de Compra 🧾",
-      text: "Adjunto tu ticket de compra",
+      to: destinatario,
+      subject: "Tu Ticket de Compra",
+      html: htmlBody,
       attachments: [
         {
           filename: "ticket.pdf",
@@ -80,7 +135,7 @@ export const handler = async (event) => {
       ],
     });
 
-    return { statusCode: 200, body: "Ticket enviado ✅" };
+    return { statusCode: 200, body: "Ticket enviado y guardado en Firestore ✅" };
   } catch (error) {
     console.error(error);
     return { statusCode: 500, body: "Error: " + error.message };

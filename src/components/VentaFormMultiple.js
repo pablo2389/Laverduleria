@@ -15,7 +15,10 @@ const VentaFormMultiple = ({ productos, onRegistrarVenta, clienteNombre, cliente
     for (const producto of productos) {
       const cantidad = cantidades[producto.id] || 0;
       if (cantidad > 0) {
-        let subtotal = producto.unidad === "grs" ? producto.precio * (cantidad / 1000) : producto.precio * cantidad;
+        let subtotal =
+          producto.unidad === "grs"
+            ? producto.precio * (cantidad / 1000)
+            : producto.precio * cantidad;
         total += subtotal;
       }
     }
@@ -26,7 +29,7 @@ const VentaFormMultiple = ({ productos, onRegistrarVenta, clienteNombre, cliente
     const ventasArray = Object.entries(cantidades)
       .filter(([_, cantidad]) => cantidad > 0)
       .map(([id, cantidad]) => {
-        const prod = productos.find(p => p.id === id);
+        const prod = productos.find((p) => p.id === id);
         if (cantidad > prod.stock) {
           alert(`No hay suficiente stock de ${prod.nombre}`);
           throw new Error("Stock insuficiente");
@@ -39,21 +42,48 @@ const VentaFormMultiple = ({ productos, onRegistrarVenta, clienteNombre, cliente
       return;
     }
 
-    onRegistrarVenta(ventasArray);
+    // Armamos detalle de venta para mostrar en la app
+    const detalleVenta = ventasArray.map(({ productoId, cantidad }) => {
+      const p = productos.find((prod) => prod.id === productoId);
+      const subtotal =
+        p.unidad === "grs" ? p.precio * (cantidad / 1000) : p.precio * cantidad;
+      return {
+        nombre: p.nombre,
+        cantidad,
+        unidad: p.unidad,
+        precioUnitario: p.precio,
+        subtotal,
+      };
+    });
 
+    const totalVenta = detalleVenta.reduce((acc, item) => acc + item.subtotal, 0);
+
+    // Llamamos a la función de App.jsx pasando también el detalle
+    onRegistrarVenta(
+      ventasArray,
+      {
+        nombre: "Venta múltiple",
+        cantidad: ventasArray.reduce((a, v) => a + v.cantidad, 0),
+        total: totalVenta,
+        detalle: detalleVenta,
+      }
+    );
+
+    // Enviar ticket por correo
     const venta = {
       cliente: clienteNombre || "Cliente",
       email: clienteEmail || "cliente@correo.com",
-      productos: ventasArray.map(v => {
-        const p = productos.find(prod => prod.id === v.productoId);
-        return { nombre: p.nombre, cantidad: v.cantidad, precio: p.precio };
-      })
+      productos: detalleVenta.map((item) => ({
+        nombre: item.nombre,
+        cantidad: item.cantidad,
+        precio: item.precioUnitario,
+      })),
     };
 
     try {
       const response = await fetch("/.netlify/functions/enviar-ticket", {
         method: "POST",
-        body: JSON.stringify(venta)
+        body: JSON.stringify(venta),
       });
       const text = await response.text();
       alert(text);
@@ -71,14 +101,15 @@ const VentaFormMultiple = ({ productos, onRegistrarVenta, clienteNombre, cliente
     setVentaTotal(0);
   };
 
-  const hayVentas = Object.values(cantidades).some(cantidad => cantidad > 0);
+  const hayVentas = Object.values(cantidades).some((cantidad) => cantidad > 0);
 
   return (
     <div>
       <h2>🧾 Registrador de ventas múltiples</h2>
-      {productos.map(producto => (
+      {productos.map((producto) => (
         <div key={producto.id} style={{ marginBottom: "10px" }}>
-          <strong>{producto.nombre}</strong> - Stock: {producto.stock.toFixed(3)} {producto.unidad} - $ {producto.precio.toFixed(2)}
+          <strong>{producto.nombre}</strong> - Stock: {producto.stock.toFixed(3)}{" "}
+          {producto.unidad} - $ {producto.precio.toFixed(2)}
           <br />
           Cantidad ({producto.unidad === "grs" ? "grs" : "kg"}):{" "}
           <input

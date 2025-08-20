@@ -9,8 +9,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { db } from "./firebaseConfig"; // apunta al src/firebaseConfig.js
-
+import { db } from "./firebaseConfig"; 
 
 import Contacto from "./components/Contacto";
 import ListadoProductos from "./components/ListadoProductos";
@@ -239,74 +238,49 @@ const App = () => {
     }
   };
 
-  const registrarVenta = async (ventasArray) => {
+  const registrarVenta = async (ventasArray, ventaDetalle) => {
     try {
-      let totalVenta = 0;
+      // ventaDetalle viene de VentaFormMultiple con total y detalle
+      const totalVenta = ventaDetalle.total || 0;
+
+      // Actualizamos ventas acumuladas
+      setVentasAcumuladas((prev) => (typeof prev === "number" ? prev + totalVenta : totalVenta));
+
+      // Guardamos detalle de venta
+      setMensajeVenta(ventaDetalle);
+
+      // Ajustamos stock de productos
       const nuevosProductos = productos.map((p) => ({ ...p }));
-      const detalleVenta = [];
+      for (const item of ventaDetalle.detalle) {
+        const prod = nuevosProductos.find((p) => p.id === item.id);
+        if (!prod) continue;
 
-      for (const venta of ventasArray) {
-        const { productoId, cantidad } = venta;
-        const producto = nuevosProductos.find((p) => p.id === productoId);
-        if (!producto) throw new Error("Producto no encontrado");
+        let cantidadStockBase = item.cantidad;
+        if (prod.unidad === "kg") cantidadStockBase *= 1000;
 
-        let cantidadStockBase = cantidad;
-        let cantidadParaPrecio = cantidad;
+        prod.stockBase -= cantidadStockBase;
+        prod.stock = convertirDesdeUnidadBase(prod.stockBase, prod.unidad);
 
-        if (producto.unidad === "grs") {
-          cantidadParaPrecio = cantidad / 1000;
-          cantidadStockBase = cantidad;
-        } else if (producto.unidad === "kg") {
-          cantidadStockBase = cantidad * 1000;
-        }
+        const productoRef = doc(db, "productos", prod.id);
+        await updateDoc(productoRef, {
+          stockBase: prod.stockBase,
+          stock: prod.stock,
+        });
 
-        if (cantidadStockBase > producto.stockBase) {
-          setMensajeEstado(`Stock insuficiente para ${producto.nombre}`);
-          return;
-        }
-
-        producto.stockBase -= cantidadStockBase;
-        producto.stock = convertirDesdeUnidadBase(
-          producto.stockBase,
-          producto.unidad
-        );
-
+        // Guardamos en Firestore la venta individual
         const ventasCol = collection(db, "ventas");
         await addDoc(ventasCol, {
-          productoId: producto.id,
-          nombre: producto.nombre,
-          precioUnitario: producto.precio,
-          cantidad: cantidad,
-          unidad: producto.unidad,
-          total: cantidadParaPrecio * producto.precio,
+          productoId: prod.id,
+          nombre: prod.nombre,
+          precioUnitario: prod.precio,
+          cantidad: item.cantidad,
+          unidad: prod.unidad,
+          total: item.subtotal,
           fecha: serverTimestamp(),
         });
-
-        detalleVenta.push({
-          nombre: producto.nombre,
-          cantidad,
-          unidad: producto.unidad,
-          precioUnitario: producto.precio,
-          subtotal: cantidadParaPrecio * producto.precio,
-        });
-
-        const productoRef = doc(db, "productos", producto.id);
-        await updateDoc(productoRef, {
-          stockBase: producto.stockBase,
-          stock: producto.stock,
-        });
-
-        totalVenta += cantidadParaPrecio * producto.precio;
       }
 
       setProductos(nuevosProductos);
-      setVentasAcumuladas((prev) => prev + totalVenta);
-      setMensajeVenta({
-        nombre: "Venta múltiple",
-        cantidad: ventasArray.reduce((a, v) => a + v.cantidad, 0),
-        total: totalVenta,
-        detalle: detalleVenta,
-      });
       setMensajeEstado("Venta registrada con éxito");
     } catch (error) {
       setMensajeEstado("Error al registrar venta: " + error.message);
@@ -346,7 +320,10 @@ const App = () => {
       </section>
 
       <section>
-        <VentaFormMultiple productos={productos} onRegistrarVenta={registrarVenta} />
+        <VentaFormMultiple
+          productos={productos}
+          onRegistrarVenta={registrarVenta}
+        />
         {mensajeVenta && (
           <div
             style={{
