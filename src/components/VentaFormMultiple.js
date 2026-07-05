@@ -1,4 +1,4 @@
-import React, { useState, forwardRef, useImperativeHandle } from "react";
+import { forwardRef, useImperativeHandle, useState } from "react";
 
 const VentaFormMultiple = forwardRef(({ productos, onRegistrarVenta }, ref) => {
   const [ventaDetalle, setVentaDetalle] = useState({
@@ -41,6 +41,20 @@ const VentaFormMultiple = forwardRef(({ productos, onRegistrarVenta }, ref) => {
     });
   };
 
+  // Sacar un producto del carrito en vivo (equivale a poner su cantidad en 0)
+  const quitarDelCarrito = (id) => {
+    const detalleActualizado = ventaDetalle.detalle.filter((d) => d.id !== id);
+    const total = detalleActualizado.reduce((acc, item) => acc + item.subtotal, 0);
+    const cantidadTotal = detalleActualizado.reduce((acc, item) => acc + item.cantidad, 0);
+
+    setVentaDetalle({
+      ...ventaDetalle,
+      detalle: detalleActualizado,
+      total,
+      cantidad: cantidadTotal,
+    });
+  };
+
   const handleRegistrarVenta = () => {
     if (ventaDetalle.detalle.length === 0) return alert("Seleccione al menos un producto");
     onRegistrarVenta([], ventaDetalle);
@@ -64,12 +78,78 @@ const VentaFormMultiple = forwardRef(({ productos, onRegistrarVenta }, ref) => {
         </div>
       ))}
 
-      <p><strong>Total:</strong> ${ventaDetalle.total.toFixed(2)}</p>
-      <p><strong>Cantidad total:</strong> {ventaDetalle.cantidad}</p>
+      {/* 🛒 Carrito en vivo: se va llenando a medida que el cajero carga cantidades */}
+      <div
+        style={{
+          marginTop: 20,
+          padding: 12,
+          border: "2px solid #007bff",
+          borderRadius: 8,
+          backgroundColor: "#f8f9fa",
+        }}
+      >
+        <h4 style={{ marginTop: 0, color: "#007bff" }}>🛒 Venta actual</h4>
+
+        {ventaDetalle.detalle.length === 0 ? (
+          <p style={{ color: "#888", fontStyle: "italic" }}>
+            Todavía no cargaste ningún producto.
+          </p>
+        ) : (
+          <ul style={{ listStyle: "none", paddingLeft: 0, margin: 0 }}>
+            {ventaDetalle.detalle.map((item) => (
+              <li
+                key={item.id}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "6px 0",
+                  borderBottom: "1px solid #ddd",
+                }}
+              >
+                <span>
+                  {item.nombre} — {item.cantidad} {item.unidad} × ${item.precioUnitario.toFixed(2)}
+                </span>
+                <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <strong>${item.subtotal.toFixed(2)}</strong>
+                  <button
+                    onClick={() => quitarDelCarrito(item.id)}
+                    title="Quitar de la venta"
+                    style={{
+                      backgroundColor: "transparent",
+                      border: "none",
+                      color: "#dc3545",
+                      cursor: "pointer",
+                      fontSize: 16,
+                    }}
+                  >
+                    ✖
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div
+          style={{
+            marginTop: 10,
+            paddingTop: 10,
+            borderTop: "2px solid #007bff",
+            display: "flex",
+            justifyContent: "space-between",
+            fontWeight: "bold",
+            fontSize: 18,
+          }}
+        >
+          <span>Total:</span>
+          <span>${ventaDetalle.total.toFixed(2)}</span>
+        </div>
+      </div>
 
       <button
         onClick={handleRegistrarVenta}
-        style={{ padding: "8px 15px", borderRadius: 6, backgroundColor: "#007bff", color: "white", border: "none", cursor: "pointer", marginTop: 10 }}
+        style={{ padding: "8px 15px", borderRadius: 6, backgroundColor: "#007bff", color: "white", border: "none", cursor: "pointer", marginTop: 15 }}
       >
         💰 Registrar Venta
       </button>
