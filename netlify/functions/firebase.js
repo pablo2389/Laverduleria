@@ -1,5 +1,5 @@
 // netlify/functions/firebaseConfig.js
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -11,5 +11,7 @@ const firebaseConfig = {
   appId: "1:253939309797:web:db91c054fc56576e04880c",
 };
 
-const app = initializeApp(firebaseConfig);
+// Evita reinicializar Firebase cada vez que se ejecute la función
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+
 export const db = getFirestore(app);

@@ -1,9 +1,8 @@
+// netlify/functions/registrar-venta.js
 import { db } from "./firebaseConfig";
 import { collection, addDoc } from "firebase/firestore";
 import nodemailer from "nodemailer";
 import PDFDocument from "pdfkit";
-import path from "path";
-import fs from "fs";
 
 // Validación de email
 function esEmailValido(email) {
@@ -20,8 +19,8 @@ const generarPDF = (productos, cliente, email) =>
     doc.on("data", buffers.push.bind(buffers));
     doc.on("end", () => resolve(Buffer.concat(buffers)));
 
-    // Fuente UTF-8 (agregar DejaVuSans.ttf en /fonts)
-    doc.font(path.join(process.cwd(), "fonts", "DejaVuSans.ttf"));
+    // Fuente estándar de PDFKit
+    doc.font("Helvetica");
 
     doc.fontSize(20).text("Ticket de Compra - Verdulería", { align: "center" });
     doc.moveDown();
@@ -89,7 +88,7 @@ const generarHTML = (productos, cliente, email) => {
   `;
 };
 
-export async function handler(event, context) {
+export async function handler(event) {
   try {
     const body = JSON.parse(event.body);
     const { cliente, email, productos } = body;
@@ -98,10 +97,8 @@ export async function handler(event, context) {
       return { statusCode: 400, body: "Faltan datos de la venta" };
     }
 
-    // Validación de email
-    const destinatario = esEmailValido(email) ? email : "pablomas.kpo2389@gmail.com";
+    const destinatario = esEmailValido(email) ? email : process.env.SMTP_USER;
 
-    // Generar PDF + HTML
     const pdfBuffer = await generarPDF(productos, cliente, destinatario);
     const htmlBody = generarHTML(productos, cliente, destinatario);
 
@@ -117,14 +114,15 @@ export async function handler(event, context) {
 
     // Configurar Nodemailer
     const transporter = nodemailer.createTransport({
-      service: "gmail",
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT),
+      secure: false,
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
     });
 
-    // Enviar correo con PDF adjunto + HTML
     await transporter.sendMail({
       from: `"Verdulería" <${process.env.SMTP_USER}>`,
       to: destinatario,
