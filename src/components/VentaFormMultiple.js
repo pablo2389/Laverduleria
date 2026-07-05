@@ -1,23 +1,23 @@
 import { forwardRef, useImperativeHandle, useState } from "react";
 
 const VentaFormMultiple = forwardRef(({ productos, onRegistrarVenta }, ref) => {
-  const [ventaDetalle, setVentaDetalle] = useState({
-    nombre: "Venta múltiple",
-    detalle: [],
-    total: 0,
-    cantidad: 0,
-  });
+  // Única fuente de verdad: el array de items cargados.
+  // El total y la cantidad SIEMPRE se calculan a partir de este array,
+  // nunca se guardan aparte, así no pueden quedar desincronizados.
+  const [detalle, setDetalle] = useState([]);
 
-  // Permitir reiniciar desde el ref
+  const total = detalle.reduce((acc, item) => acc + item.subtotal, 0);
+  const cantidadTotal = detalle.reduce((acc, item) => acc + item.cantidad, 0);
+
   useImperativeHandle(ref, () => ({
     resetForm() {
-      setVentaDetalle({ nombre: "Venta múltiple", detalle: [], total: 0, cantidad: 0 });
+      setDetalle([]);
     },
   }));
 
   const handleCantidadChange = (producto, cantidad) => {
-    let nuevaCantidad = parseFloat(cantidad) || 0;
-    let detalleActualizado = ventaDetalle.detalle.filter((d) => d.id !== producto.id);
+    const nuevaCantidad = parseFloat(cantidad) || 0;
+    const detalleActualizado = detalle.filter((d) => d.id !== producto.id);
 
     if (nuevaCantidad > 0) {
       detalleActualizado.push({
@@ -30,33 +30,22 @@ const VentaFormMultiple = forwardRef(({ productos, onRegistrarVenta }, ref) => {
       });
     }
 
-    const total = detalleActualizado.reduce((acc, item) => acc + item.subtotal, 0);
-    const cantidadTotal = detalleActualizado.reduce((acc, item) => acc + item.cantidad, 0);
-
-    setVentaDetalle({
-      ...ventaDetalle,
-      detalle: detalleActualizado,
-      total,
-      cantidad: cantidadTotal,
-    });
+    setDetalle(detalleActualizado);
   };
 
-  // Sacar un producto del carrito en vivo (equivale a poner su cantidad en 0)
+  // Sacar un producto del carrito en vivo
   const quitarDelCarrito = (id) => {
-    const detalleActualizado = ventaDetalle.detalle.filter((d) => d.id !== id);
-    const total = detalleActualizado.reduce((acc, item) => acc + item.subtotal, 0);
-    const cantidadTotal = detalleActualizado.reduce((acc, item) => acc + item.cantidad, 0);
-
-    setVentaDetalle({
-      ...ventaDetalle,
-      detalle: detalleActualizado,
-      total,
-      cantidad: cantidadTotal,
-    });
+    setDetalle((prev) => prev.filter((d) => d.id !== id));
   };
 
   const handleRegistrarVenta = () => {
-    if (ventaDetalle.detalle.length === 0) return alert("Seleccione al menos un producto");
+    if (detalle.length === 0) return alert("Seleccione al menos un producto");
+    const ventaDetalle = {
+      nombre: "Venta múltiple",
+      detalle,
+      total,
+      cantidad: cantidadTotal,
+    };
     onRegistrarVenta([], ventaDetalle);
   };
 
@@ -90,13 +79,13 @@ const VentaFormMultiple = forwardRef(({ productos, onRegistrarVenta }, ref) => {
       >
         <h4 style={{ marginTop: 0, color: "#007bff" }}>🛒 Venta actual</h4>
 
-        {ventaDetalle.detalle.length === 0 ? (
+        {detalle.length === 0 ? (
           <p style={{ color: "#888", fontStyle: "italic" }}>
             Todavía no cargaste ningún producto.
           </p>
         ) : (
           <ul style={{ listStyle: "none", paddingLeft: 0, margin: 0 }}>
-            {ventaDetalle.detalle.map((item) => (
+            {detalle.map((item) => (
               <li
                 key={item.id}
                 style={{
@@ -143,7 +132,7 @@ const VentaFormMultiple = forwardRef(({ productos, onRegistrarVenta }, ref) => {
           }}
         >
           <span>Total:</span>
-          <span>${ventaDetalle.total.toFixed(2)}</span>
+          <span>${total.toFixed(2)}</span>
         </div>
       </div>
 
