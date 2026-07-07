@@ -40,6 +40,28 @@ const VentaFormMultiple = forwardRef(({ productos, onRegistrarVenta }, ref) => {
 
   const handleRegistrarVenta = () => {
     if (detalle.length === 0) return alert("Seleccione al menos un producto");
+
+    // Bloqueo: no permitir vender más stock del disponible.
+    // Se valida contra el stock ACTUAL de productos (por si cambió
+    // desde que se cargó la cantidad), no solo contra lo que había
+    // al momento de tipear.
+    const sinStock = detalle.filter((item) => {
+      const prod = productos.find((p) => p.id === item.id);
+      return !prod || item.cantidad > prod.stock;
+    });
+
+    if (sinStock.length > 0) {
+      const detalleFaltante = sinStock
+        .map((item) => {
+          const prod = productos.find((p) => p.id === item.id);
+          const disponible = prod ? prod.stock : 0;
+          return `- ${item.nombre}: pediste ${item.cantidad} ${item.unidad}, disponible: ${disponible} ${item.unidad}`;
+        })
+        .join("\n");
+      alert(`No hay stock suficiente para completar la venta:\n\n${detalleFaltante}`);
+      return;
+    }
+
     const ventaDetalle = {
       nombre: "Venta múltiple",
       detalle,
@@ -85,38 +107,46 @@ const VentaFormMultiple = forwardRef(({ productos, onRegistrarVenta }, ref) => {
           </p>
         ) : (
           <ul style={{ listStyle: "none", paddingLeft: 0, margin: 0 }}>
-            {detalle.map((item) => (
-              <li
-                key={item.id}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "6px 0",
-                  borderBottom: "1px solid #ddd",
-                }}
-              >
-                <span>
-                  {item.nombre} — {item.cantidad} {item.unidad} × ${item.precioUnitario.toFixed(2)}
-                </span>
-                <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <strong>${item.subtotal.toFixed(2)}</strong>
-                  <button
-                    onClick={() => quitarDelCarrito(item.id)}
-                    title="Quitar de la venta"
-                    style={{
-                      backgroundColor: "transparent",
-                      border: "none",
-                      color: "#dc3545",
-                      cursor: "pointer",
-                      fontSize: 16,
-                    }}
-                  >
-                    ✖
-                  </button>
-                </span>
-              </li>
-            ))}
+            {detalle.map((item) => {
+              const prod = productos.find((p) => p.id === item.id);
+              const excedeStock = prod && item.cantidad > prod.stock;
+              return (
+                <li
+                  key={item.id}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "6px 0",
+                    borderBottom: "1px solid #ddd",
+                    color: excedeStock ? "#dc3545" : "inherit",
+                  }}
+                >
+                  <span>
+                    {item.nombre} — {item.cantidad} {item.unidad} × ${item.precioUnitario.toFixed(2)}
+                    {excedeStock && (
+                      <strong> (¡supera el stock disponible: {prod.stock} {item.unidad}!)</strong>
+                    )}
+                  </span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <strong>${item.subtotal.toFixed(2)}</strong>
+                    <button
+                      onClick={() => quitarDelCarrito(item.id)}
+                      title="Quitar de la venta"
+                      style={{
+                        backgroundColor: "transparent",
+                        border: "none",
+                        color: "#dc3545",
+                        cursor: "pointer",
+                        fontSize: 16,
+                      }}
+                    >
+                      ✖
+                    </button>
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         )}
 

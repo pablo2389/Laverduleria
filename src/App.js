@@ -28,6 +28,15 @@ const convertirAUnidadBase = (stock, precio, unidad) => {
   return { stockBase, precioBase };
 };
 
+// Normaliza nombres para comparar sin importar tildes/mayúsculas
+// (evita que "papas" y "papás" se guarden como productos distintos)
+const normalizarNombre = (str) =>
+  (str || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
 // Función para enviar PDF o venta al backend
 const enviarVenta = async (venta) => {
   try {
@@ -99,9 +108,11 @@ const App = () => {
   const agregarProducto = async (producto) => {
     try {
       const snapshot = await getDocs(collection(db, "productos"));
+      // Comparación sin tildes/mayúsculas, para que "papas" y "papás"
+      // se traten como el mismo producto (fix de duplicados)
       const existente = snapshot.docs
         .map((doc) => ({ id: doc.id, ...doc.data() }))
-        .find((p) => p.nombre.toLowerCase() === producto.nombre.toLowerCase());
+        .find((p) => normalizarNombre(p.nombre) === normalizarNombre(producto.nombre));
 
       const unidad = producto.unidad || "kg";
       const { stockBase, precioBase } = convertirAUnidadBase(producto.stock, producto.precio, unidad);
@@ -129,7 +140,7 @@ const App = () => {
               : p
           )
         );
-        setMensajeEstado(`Producto ${producto.nombre} actualizado con éxito`);
+        setMensajeEstado(`Producto ${producto.nombre} actualizado con éxito (sumado a "${existente.nombre}")`);
       } else {
         const productoParaGuardar = { ...producto, unidad, stockBase, precioBase, stock: producto.stock };
         const docRef = await addDoc(collection(db, "productos"), productoParaGuardar);
